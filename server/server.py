@@ -39,7 +39,8 @@ def client_thread(reader, writer):
 
       chatroom_id = data['chatroom_id']
 
-      client_queues[chatroom_id] = {}
+      if client_queues.get(chatroom_id) is None:
+        client_queues[chatroom_id] = {}
       client_queues[chatroom_id][client_id] = queue.Queue()
 
       # TODO: stop old thread
