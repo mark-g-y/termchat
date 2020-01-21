@@ -35,6 +35,9 @@ def receiver_thread(writer, chatroom_id, client_id):
     try:
       logger.info('trying to read...' + str(client_id))
       message = client_queues[chatroom_id][client_id].get(block=True, timeout=10)
+      logger.info('received message and now broadcasting: ' + message)
+      writer.write(json.dumps({'type': 'message', 'text': message}) + '\n')
+      writer.flush()
     except:
       # See if client is still alive.
       logger.info('seeing if client is alive' + str(client_id))
@@ -42,10 +45,8 @@ def receiver_thread(writer, chatroom_id, client_id):
         writer.write(json.dumps({'type': 'ping'}) + '\n')
         writer.flush()
       except:
-        logging.info('client disconnected', client_id)
+        logger.info('client disconnected' + str(client_id))
         break
-    writer.write(json.dumps({'type': 'message', 'text': message}) + '\n')
-    writer.flush()
 
 def client_thread(reader, writer):
   global client_queues
@@ -57,7 +58,8 @@ def client_thread(reader, writer):
     if data.strip() == '':
       # Disconnected - leave
       client_queues_lock.acquire()
-      del client_queues[chatroom_id][client_id]
+      if chatroom_id is not None and client_id is not None and client_queues.get(chatroom_id) is not None and client_queues[chatroom_id].get(client_id) is not None:
+        del client_queues[chatroom_id][client_id]
       client_queues_lock.release()
       break
     data = json.loads(data)
@@ -85,9 +87,12 @@ def client_thread(reader, writer):
       client_queues_lock.release()
     elif data['type'] == 'message':
       client_queues_lock.acquire()
-      receivers = client_queues[chatroom_id]
-      for receiver_id in receivers.keys():
-        receivers[receiver_id].put(data['text'])
+      if client_queues.get(chatroom_id) is not None:
+        receivers = client_queues[chatroom_id]
+        for receiver_id in receivers.keys():
+            receivers[receiver_id].put(data['text'])
+      else:
+        logger.warning('Tried to write to non-existent chatroom ID - ' + str(chatroom_id))
       client_queues_lock.release()
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
