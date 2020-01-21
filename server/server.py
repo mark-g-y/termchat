@@ -1,12 +1,13 @@
 import json
-import queue
+import logging
+import Queue as queue
 import random
 import socket
 import sys
 import thread
 import threading
 
-HOST = 'localhost'
+HOST = '0.0.0.0'
 PORT = 1738
 
 random.seed(0)
@@ -16,16 +17,16 @@ client_queues = {}
 def receiver_thread(writer, chatroom_id, client_id):
   while True:
     try:
-      print 'trying to read...', client_id
+      logging.info('trying to read...', client_id)
       message = client_queues[chatroom_id][client_id].get(block=True, timeout=10)
     except:
       # See if client is still alive.
-      print 'seeing if client is alive', client_id
+      logging.info('seeing if client is alive', client_id)
       try:
         writer.write(json.dumps({'type': 'ping'}) + '\n')
         writer.flush()
       except:
-        print 'client disconnected', client_id
+        logging.info('client disconnected', client_id)
         break
     writer.write(json.dumps({'type': 'message', 'text': message}) + '\n')
     writer.flush()
@@ -79,14 +80,14 @@ sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 try:
   sock.bind((HOST, PORT))
 except socket.error as msg:
-  print('Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1])
+  logging.error('Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1])
   sys.exit()
   
 sock.listen(10)
 
 while True:
   conn, addr = sock.accept()
-  print('Connected with ' + addr[0] + ':' + str(addr[1]))
+  logging.info('Connected with ' + addr[0] + ':' + str(addr[1]))
 
   reader  = conn.makefile('r')
   writer = conn.makefile('w')
