@@ -13,20 +13,21 @@ random.seed(0)
 client_queues_lock = threading.Lock()
 client_queues = {}
 
-def receiver_thread(conn, chatroom_id, client_id):
+def receiver_thread(writer, chatroom_id, client_id):
   while True:
     message = client_queues[chatroom_id][client_id].get(block=True)
-    conn.send(json.dumps({'type': 'message', 'text': message}))
+    writer.write(json.dumps({'type': 'message', 'text': message}) + '\n')
+    writer.flush()
 
-def client_thread(conn):
+def client_thread(reader, writer):
   global client_queues
   chatroom_id = None
   client_id = random.randint(0, 1000000)
   receiver_thread_id = None
   while True:
-    data = conn.recv(2048)
-    print data
-    print 'space'
+    data = reader.readline()
+    if data.strip() == '':
+      continue
     data = json.loads(data)
 
     if data['type'] == 'subscribe':
@@ -42,12 +43,13 @@ def client_thread(conn):
       client_queues[chatroom_id][client_id] = queue.Queue()
 
       # TODO: stop old thread
-      receiver_thread_id = thread.start_new_thread(receiver_thread, (conn, chatroom_id, client_id, ))
+      receiver_thread_id = thread.start_new_thread(receiver_thread, (writer, chatroom_id, client_id, ))
 
       client_queues_lock.release()
     elif data['type'] == 'list_chatrooms':
       client_queues_lock.acquire()
-      conn.send(json.dumps({'type': 'list_chatrooms', 'chatroom_ids': list(client_queues.keys())}))
+      writer.write(json.dumps({'type': 'list_chatrooms', 'chatroom_ids': list(client_queues.keys())}) + '\n')
+      writer.flush()
       client_queues_lock.release()
     elif data['type'] == 'message':
       client_queues_lock.acquire()
@@ -62,15 +64,18 @@ sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 try:
   sock.bind((HOST, PORT))
 except socket.error as msg:
-  print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+  print('Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1])
   sys.exit()
   
 sock.listen(10)
 
 while True:
   conn, addr = sock.accept()
-  print 'Connected with ' + addr[0] + ':' + str(addr[1])
+  print('Connected with ' + addr[0] + ':' + str(addr[1]))
 
-  thread.start_new_thread(client_thread, (conn, ))
+  reader  = conn.makefile('r')
+  writer = conn.makefile('w')
+
+  thread.start_new_thread(client_thread, (reader, writer, ))
 
 sock.close()
