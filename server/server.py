@@ -15,7 +15,18 @@ client_queues = {}
 
 def receiver_thread(writer, chatroom_id, client_id):
   while True:
-    message = client_queues[chatroom_id][client_id].get(block=True)
+    try:
+      print 'trying to read...', client_id
+      message = client_queues[chatroom_id][client_id].get(block=True, timeout=10)
+    except:
+      # See if client is still alive.
+      print 'seeing if client is alive', client_id
+      try:
+        writer.write(json.dumps({'type': 'ping'}) + '\n')
+        writer.flush()
+      except:
+        print 'client disconnected', client_id
+        break
     writer.write(json.dumps({'type': 'message', 'text': message}) + '\n')
     writer.flush()
 
@@ -27,7 +38,11 @@ def client_thread(reader, writer):
   while True:
     data = reader.readline()
     if data.strip() == '':
-      continue
+      # Disconnected - leave
+      client_queues_lock.acquire()
+      del client_queues[chatroom_id][client_id]
+      client_queues_lock.release()
+      break
     data = json.loads(data)
 
     if data['type'] == 'subscribe':
@@ -43,7 +58,6 @@ def client_thread(reader, writer):
         client_queues[chatroom_id] = {}
       client_queues[chatroom_id][client_id] = queue.Queue()
 
-      # TODO: stop old thread
       receiver_thread_id = thread.start_new_thread(receiver_thread, (writer, chatroom_id, client_id, ))
 
       client_queues_lock.release()
