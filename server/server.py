@@ -14,14 +14,30 @@ random.seed(0)
 client_queues_lock = threading.Lock()
 client_queues = {}
 
+logger = logging.getLogger('TermChat Logger')
+logger.setLevel(logging.DEBUG)
+# create file handler which logs even debug messages
+fh = logging.FileHandler('logs.log')
+fh.setLevel(logging.DEBUG)
+# create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+fh.setFormatter(formatter)
+# add the handlers to logger
+logger.addHandler(ch)
+logger.addHandler(fh)
+
 def receiver_thread(writer, chatroom_id, client_id):
   while True:
     try:
-      logging.info('trying to read...', client_id)
+      logger.info('trying to read...' + str(client_id))
       message = client_queues[chatroom_id][client_id].get(block=True, timeout=10)
     except:
       # See if client is still alive.
-      logging.info('seeing if client is alive', client_id)
+      logger.info('seeing if client is alive' + str(client_id))
       try:
         writer.write(json.dumps({'type': 'ping'}) + '\n')
         writer.flush()
@@ -80,14 +96,14 @@ sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 try:
   sock.bind((HOST, PORT))
 except socket.error as msg:
-  logging.error('Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1])
+  logger.error('Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1])
   sys.exit()
   
 sock.listen(10)
 
 while True:
   conn, addr = sock.accept()
-  logging.info('Connected with ' + addr[0] + ':' + str(addr[1]))
+  logger.info('Connected with ' + addr[0] + ':' + str(addr[1]))
 
   reader  = conn.makefile('r')
   writer = conn.makefile('w')
